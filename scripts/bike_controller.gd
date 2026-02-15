@@ -35,7 +35,15 @@ var _spin_tween: Tween
 # References
 @onready var bike_mesh: Node3D = $BikeMesh
 @onready var collision_area: Area3D = $CollisionArea
+@onready var _neon_trail_light: OmniLight3D = $BikeMesh/NeonTrail
+@onready var _underglow_light: OmniLight3D = $BikeMesh/UnderGlow
+@onready var _front_wheel_glow: OmniLight3D = $BikeMesh/FrontWheelGlow
+@onready var _rear_wheel_glow: OmniLight3D = $BikeMesh/RearWheelGlow
 var audio_reactor: AudioReactor
+
+# Fire trail
+var _fire_trail: GPUParticles3D
+var _trail_material: ParticleProcessMaterial
 
 # Road bounds (updated by road generator)
 var road_half_width: float = 7.0
@@ -46,6 +54,7 @@ func _ready() -> void:
 	current_speed = base_speed
 	if collision_area:
 		collision_area.area_entered.connect(_on_area_entered)
+	_create_fire_trail()
 
 
 func _process(delta: float) -> void:
@@ -55,6 +64,7 @@ func _process(delta: float) -> void:
 	_update_lean(delta)
 	_update_boost(delta)
 	_update_invincibility(delta)
+	_update_trail(delta)
 
 
 func _handle_input(delta: float) -> void:
@@ -70,7 +80,7 @@ func _handle_input(delta: float) -> void:
 
 	# Off-road safety net: if bike overshoots road edge, trigger hit and respawn center
 	var offset_from_road := lateral_position - road_center_x
-	if absf(offset_from_road) > road_half_width and invincible_timer <= 0.0:
+	if absf(offset_from_road) > road_half_width and invincible_timer <= 0.0 and is_grounded:
 		obstacle_hit.emit(null)
 		invincible_timer = 2.0
 		current_speed *= 0.5
@@ -205,6 +215,109 @@ func _on_area_entered(area: Area3D) -> void:
 				_spin_tween.tween_property(bike_mesh, "rotation:y", start_y + PI * 4.0, 1.0) \
 					.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
 				_spin_tween.tween_callback(func() -> void: bike_mesh.rotation.y = fmod(bike_mesh.rotation.y, TAU))
+
+
+func _create_fire_trail() -> void:
+	## Build the GPUParticles3D fire trail programmatically (avoids TSCN encoding complexity).
+	_fire_trail = GPUParticles3D.new()
+	_fire_trail.amount = 80
+	_fire_trail.lifetime = 0.8
+	_fire_trail.amount_ratio = 0.1  # Start dim
+	_fire_trail.position = Vector3(0, 0.3, 1.4)  # Behind the rear wheel
+
+	# Process material — box emission, particles fly backward+up
+	_trail_material = ParticleProcessMaterial.new()
+	_trail_material.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+	_trail_material.emission_box_extents = Vector3(0.15, 0.05, 0.1)
+	_trail_material.direction = Vector3(0, 0.3, 1)  # Backward and slightly up
+	_trail_material.spread = 15.0
+	_trail_material.initial_velocity_min = 2.0
+	_trail_material.initial_velocity_max = 5.0
+	_trail_material.gravity = Vector3(0, -0.5, 0)
+	_trail_material.scale_min = 0.08
+	_trail_material.scale_max = 0.25
+	_trail_material.color = Color(1.0, 0.4, 0.0, 0.5)
+	_fire_trail.process_material = _trail_material
+
+	# Draw pass — small emissive sphere
+	var trail_mesh := SphereMesh.new()
+	trail_mesh.radius = 0.08
+	trail_mesh.height = 0.16
+	var trail_mesh_mat := StandardMaterial3D.new()
+	trail_mesh_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	trail_mesh_mat.albedo_color = Color(1.0, 0.5, 0.1, 0.8)
+	trail_mesh_mat.emission_enabled = true
+	trail_mesh_mat.emission = Color(1.0, 0.3, 0.0)
+	trail_mesh_mat.emission_energy_multiplier = 4.0
+	trail_mesh.material = trail_mesh_mat
+	_fire_trail.draw_pass_1 = trail_mesh
+
+	if bike_mesh:
+		bike_mesh.add_child(_fire_trail)
+
+
+func _update_trail(delta: float) -> void:
+	## Modulate fire trail, neon lights, and wheel glow based on speed + audio.
+	var speed_ratio := get_speed_ratio()
+
+	# Audio energy adds to the effect
+	var audio_energy := 0.0
+	var audio_bass := 0.0
+	var on_beat := false
+	if audio_reactor:
+		audio_energy = audio_reactor.energy
+		audio_bass = audio_reactor.bass
+		on_beat = audio_reactor.is_beat
+
+	# Combined intensity: mostly speed, boosted by audio
+	var intensity := clampf(speed_ratio * 0.7 + audio_energy * 0.3, 0.0, 1.0)
+
+	# --- Fire Trail Particles ---
+	if _fire_trail and _trail_material:
+		# Particle density: thin at slow, full at fast
+		_fire_trail.amount_ratio = lerpf(_fire_trail.amount_ratio, intensity, 4.0 * delta)
+
+		# Particle lifetime: short trail at slow, long trail at speed
+		_fire_trail.lifetime = lerpf(0.3, 1.2, intensity)
+
+		# Emission box width: narrow at slow, wider at speed
+		var box_width := lerpf(0.05, 0.3, intensity)
+		_trail_material.emission_box_extents = Vector3(box_width, 0.05, 0.1 + speed_ratio * 0.2)
+
+		# Color alpha: transparent when slow, opaque when fast
+		_trail_material.color = Color(1.0, lerpf(0.3, 0.6, intensity), lerpf(0.0, 0.15, intensity), lerpf(0.4, 1.0, intensity))
+
+		# Particle velocity scales with speed
+		_trail_material.initial_velocity_min = lerpf(1.0, 4.0, speed_ratio)
+		_trail_material.initial_velocity_max = lerpf(3.0, 8.0, speed_ratio)
+
+		# Boost override: max out the trail
+		if is_boosting:
+			_fire_trail.amount_ratio = 1.0
+			_trail_material.color = Color(1.0, 0.7, 0.2, 1.0)
+			_trail_material.emission_box_extents = Vector3(0.35, 0.1, 0.3)
+
+	# --- NeonTrail light ---
+	if _neon_trail_light:
+		var trail_energy := lerpf(0.5, 4.0, intensity)
+		if is_boosting:
+			trail_energy = 5.0
+		_neon_trail_light.light_energy = lerpf(_neon_trail_light.light_energy, trail_energy, 5.0 * delta)
+		_neon_trail_light.omni_range = lerpf(2.0, 5.0, intensity)
+
+	# --- UnderGlow light ---
+	if _underglow_light:
+		var glow_energy := lerpf(0.3, 2.0, intensity)
+		_underglow_light.light_energy = lerpf(_underglow_light.light_energy, glow_energy, 4.0 * delta)
+
+	# --- Wheel glow (pulses on beat) ---
+	var wheel_energy := lerpf(0.3, 1.2, intensity)
+	if on_beat:
+		wheel_energy += audio_bass * 1.0
+	if _front_wheel_glow:
+		_front_wheel_glow.light_energy = lerpf(_front_wheel_glow.light_energy, wheel_energy, 6.0 * delta)
+	if _rear_wheel_glow:
+		_rear_wheel_glow.light_energy = lerpf(_rear_wheel_glow.light_energy, wheel_energy, 6.0 * delta)
 
 
 func get_speed_ratio() -> float:
