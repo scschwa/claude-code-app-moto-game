@@ -57,3 +57,47 @@ func _animate(combo_count: int) -> void:
 
 	# Self-destruct after longest animation
 	fade_tween.tween_callback(queue_free)
+
+
+func setup_combo(combo_count: int, spawn_position: Vector3, _side: float) -> void:
+	## Centered combo popup below the bike. Text grows aggressively with combo.
+	global_position = spawn_position
+	scale = Vector3.ONE * 0.01
+
+	_label = Label3D.new()
+	_label.text = "%dx Combo" % combo_count
+	# Font size grows aggressively: 48 at combo 3, up to 200+ at high combos
+	_label.font_size = 48 + combo_count * 8
+	_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	_label.no_depth_test = true
+	_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_label.modulate = _color_for_combo(combo_count)
+	_label.outline_modulate = Color(0, 0, 0, 0.8)
+	_label.outline_size = 12
+	add_child(_label)
+
+	_animate_combo(combo_count)
+
+
+func _animate_combo(combo_count: int) -> void:
+	## Pop in centered, scale aggressively with combo, float down slightly, fade out.
+	# Peak scale grows much more with combo: 0.3 at combo 3, huge at combo 15+
+	var peak_scale := 0.3 + clampf(combo_count * 0.08, 0.0, 2.5)
+
+	# Scale: pop in with overshoot, then shrink
+	var scale_tween := create_tween()
+	scale_tween.tween_property(self, "scale", Vector3.ONE * peak_scale, 0.1) \
+		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+	scale_tween.tween_property(self, "scale", Vector3.ONE * 0.05, 0.8) \
+		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+
+	# Float downward slightly from spawn point
+	var down_tween := create_tween()
+	down_tween.tween_property(self, "position:y", position.y - 1.0, 0.9) \
+		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+
+	# Fade out
+	var fade_tween := create_tween()
+	fade_tween.tween_interval(0.25)
+	fade_tween.tween_property(_label, "modulate:a", 0.0, 0.65)
+	fade_tween.tween_callback(queue_free)

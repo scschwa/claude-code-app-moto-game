@@ -29,6 +29,8 @@ var _coin_pattern_timer: float = 0.0
 # Materials (created procedurally)
 var _road_material: StandardMaterial3D
 var _desert_material: StandardMaterial3D
+var _void_material: StandardMaterial3D
+var _edge_material: StandardMaterial3D
 var _line_material: StandardMaterial3D
 
 
@@ -75,6 +77,7 @@ func _process(delta: float) -> void:
 	# Update bike road bounds from a segment near the bike (index ~2)
 	if _segments.size() > 2:
 		bike.road_half_width = _segments[2].width / 2.0
+		bike.road_center_x = _segments[2].curve_offset
 
 	# Spawn timers
 	_obstacle_cooldown -= delta
@@ -128,11 +131,17 @@ func _spawn_segment() -> void:
 	seg.center_line = _create_center_line(seg.width)
 	seg_node.add_child(seg.center_line)
 
-	# Desert terrain on both sides
+	# Void drop-off terrain on both sides
 	seg.left_terrain = _create_terrain_side(-seg.width / 2.0 - 15.0, 30.0)
 	seg_node.add_child(seg.left_terrain)
 	seg.right_terrain = _create_terrain_side(seg.width / 2.0 + 15.0, 30.0)
 	seg_node.add_child(seg.right_terrain)
+
+	# Glowing edge strips along road borders
+	var left_edge := _create_edge_strip(-seg.width / 2.0)
+	seg_node.add_child(left_edge)
+	var right_edge := _create_edge_strip(seg.width / 2.0)
+	seg_node.add_child(right_edge)
 
 	# Spawn obstacles on this segment
 	_maybe_spawn_obstacles(seg_node, seg.width)
@@ -168,10 +177,22 @@ func _create_terrain_side(x_offset: float, width: float) -> MeshInstance3D:
 	var mesh_instance := MeshInstance3D.new()
 	var plane := PlaneMesh.new()
 	plane.size = Vector2(width, segment_length)
-	plane.material = _desert_material
+	plane.material = _void_material
 	mesh_instance.mesh = plane
 	mesh_instance.position.x = x_offset
-	mesh_instance.position.y = -0.05
+	mesh_instance.position.y = -2.0  # Visible drop-off below road level
+	return mesh_instance
+
+
+func _create_edge_strip(x_pos: float) -> MeshInstance3D:
+	## Thin glowing strip along the road border marking the drop-off edge.
+	var mesh_instance := MeshInstance3D.new()
+	var box := BoxMesh.new()
+	box.size = Vector3(0.15, 0.3, segment_length)
+	box.material = _edge_material
+	mesh_instance.mesh = box
+	mesh_instance.position.x = x_pos
+	mesh_instance.position.y = 0.0
 	return mesh_instance
 
 
@@ -291,7 +312,7 @@ func _create_coin() -> Node3D:
 	area.add_to_group("coin")
 	var shape := CollisionShape3D.new()
 	var sphere_shape := SphereShape3D.new()
-	sphere_shape.radius = 0.6
+	sphere_shape.radius = 0.9  # 1.5x pickup radius for forgiving collection
 	shape.shape = sphere_shape
 	area.add_child(shape)
 	node.add_child(area)
@@ -310,10 +331,26 @@ func _create_materials() -> void:
 	_road_material.albedo_color = Color(0.12, 0.12, 0.15)
 	_road_material.roughness = 0.9
 
-	# Desert terrain — warm sandy color
+	# Desert terrain — warm sandy color (kept for far background)
 	_desert_material = StandardMaterial3D.new()
 	_desert_material.albedo_color = Color(0.76, 0.55, 0.3)
 	_desert_material.roughness = 1.0
+
+	# Void drop-off — dark semi-transparent with subtle purple emission
+	_void_material = StandardMaterial3D.new()
+	_void_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_void_material.albedo_color = Color(0.05, 0.02, 0.1, 0.3)
+	_void_material.emission_enabled = true
+	_void_material.emission = Color(0.15, 0.05, 0.25)
+	_void_material.emission_energy_multiplier = 0.8
+	_void_material.roughness = 0.3
+
+	# Edge strip — glowing orange border along road edge
+	_edge_material = StandardMaterial3D.new()
+	_edge_material.albedo_color = Color(1.0, 0.5, 0.0, 1.0)
+	_edge_material.emission_enabled = true
+	_edge_material.emission = Color(1.0, 0.4, 0.0)
+	_edge_material.emission_energy_multiplier = 3.0
 
 	# Lane markings — bright white/yellow
 	_line_material = StandardMaterial3D.new()

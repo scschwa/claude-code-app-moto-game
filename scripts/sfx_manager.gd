@@ -43,20 +43,21 @@ func _combo_to_tier(combo: int) -> int:
 
 
 func _generate_coin_sound(combo: int = 0) -> AudioStreamWAV:
-	## Futuristic ascending ding with FM synthesis.
-	## Intensity scales with combo tier: higher pitch, more harmonics,
-	## FM modulation, second voice, and noise whoosh at high combos.
+	## Resonant bell/gong with FM synthesis — low, rich tone.
+	## Intensity scales with combo tier: deeper body, more harmonics,
+	## sub-bass octave, detuned gong voice, and shimmer at high combos.
 	var tier := _combo_to_tier(combo)
-	var sample_rate := 22050
+	var sample_rate := 44100  # Higher rate for cleaner low frequencies
 
-	# Parameters scaled by tier
-	var base_freq := 1200.0 + tier * 200.0          # 1200 Hz to 2600 Hz
-	var sweep_ratio := 1.2 + tier * 0.114            # 1.2x to ~2.0x
-	var num_harmonics := 2 + int(tier * 0.7)         # 2 to 6
-	var duration := 0.12 + tier * 0.018              # 120ms to ~250ms
-	var fm_index := maxf(0.0, (tier - 1.5) * 0.75)  # 0 for tier 0-1, ramps up
-	var has_second_voice := tier >= 4
-	var has_whoosh := tier >= 6
+	# Parameters scaled by tier — much lower base than before
+	var base_freq := 280.0 + tier * 40.0             # 280 Hz to 600 Hz (was 1200-2600)
+	var sweep_ratio := 1.05 + tier * 0.03            # 1.05x to ~1.29x — subtle sweep
+	var num_harmonics := 3 + int(tier * 0.85)        # 3 to 9 — richer body
+	var duration := 0.25 + tier * 0.04               # 250ms to ~570ms — longer resonance
+	var fm_index := maxf(0.0, (tier - 2.0) * 0.6)   # 0 for tier 0-2, gentler onset
+	var has_sub_bass := tier >= 1
+	var has_second_voice := tier >= 3                 # Gong beating at tier 3+
+	var has_shimmer := tier >= 6
 
 	var sample_count := int(sample_rate * duration)
 	var data := PackedByteArray()
@@ -66,40 +67,48 @@ func _generate_coin_sound(combo: int = 0) -> AudioStreamWAV:
 		var t := float(i) / sample_rate
 		var progress := float(i) / sample_count
 
-		# Ascending frequency sweep
+		# Gentle ascending frequency sweep
 		var freq := base_freq + (base_freq * sweep_ratio - base_freq) * progress
 
-		# FM synthesis: modulate carrier with modulator for digital quality
-		var fm_mod := sin(t * base_freq * 1.5 * TAU) * fm_index
+		# FM synthesis: modulate carrier with modulator for metallic bell quality
+		var fm_mod := sin(t * base_freq * 1.41 * TAU) * fm_index
 
-		# Envelope: sharp attack, exponential decay
-		var envelope := pow(1.0 - progress, 1.5 + tier * 0.2)
-		# Quick attack ramp (first 5%)
-		if progress < 0.05:
-			envelope *= progress / 0.05
+		# Bell envelope: sharp attack, slow exponential decay for resonance
+		var envelope := pow(1.0 - progress, 0.8 + tier * 0.15)
+		# Quick attack ramp (first 3%)
+		if progress < 0.03:
+			envelope *= progress / 0.03
 
 		# Main carrier with FM modulation
 		var sample := sin(t * freq * TAU + fm_mod) * envelope
 
-		# Harmonics (each at decreasing amplitude)
+		# Rich harmonics (each at decreasing amplitude) — bell overtones
 		for h in range(1, num_harmonics):
-			var h_amp := 0.3 / float(h + 1)
-			sample += sin(t * freq * float(h + 1) * TAU + fm_mod) * envelope * h_amp
+			var h_amp := 0.35 / float(h + 1)
+			# Bell-like inharmonic partials: slightly detuned from integer ratios
+			var partial_ratio := float(h + 1) + 0.01 * float(h)
+			sample += sin(t * freq * partial_ratio * TAU + fm_mod * 0.5) * envelope * h_amp
 
-		# Second voice at musical fifth (tier 4+, delayed onset)
-		if has_second_voice and progress > 0.08:
-			var voice2_progress := (progress - 0.08) / 0.92
-			var voice2_env := pow(1.0 - voice2_progress, 2.0)
-			var voice2_freq := freq * 1.5  # Perfect fifth
-			sample += sin(t * voice2_freq * TAU) * voice2_env * 0.25
+		# Sub-bass: octave below adds warmth and body (tier 1+)
+		if has_sub_bass:
+			var sub_env := pow(1.0 - progress, 1.2) * 0.3
+			sample += sin(t * freq * 0.5 * TAU) * sub_env
 
-		# Noise whoosh burst (tier 6+)
-		if has_whoosh:
-			var whoosh_env := pow(maxf(1.0 - progress * 3.0, 0.0), 2.0) * 0.08
-			sample += randf_range(-1.0, 1.0) * whoosh_env
+		# Second voice: slightly detuned octave for gong beating (tier 3+)
+		if has_second_voice and progress > 0.05:
+			var voice2_progress := (progress - 0.05) / 0.95
+			var voice2_env := pow(1.0 - voice2_progress, 1.5) * 0.2
+			var voice2_freq := freq * 2.003  # Slight detune creates beating
+			sample += sin(t * voice2_freq * TAU) * voice2_env
 
-		# Soft clip with tier-scaled drive
-		sample = clampf(sample * (0.8 + tier * 0.05), -1.0, 1.0)
+		# High shimmer burst (tier 6+) — adds sparkle at extreme combos
+		if has_shimmer:
+			var shimmer_env := pow(maxf(1.0 - progress * 2.5, 0.0), 2.0) * 0.06
+			sample += sin(t * freq * 5.03 * TAU) * shimmer_env
+			sample += randf_range(-1.0, 1.0) * shimmer_env * 0.3
+
+		# Soft clip with gentler drive for clean bell tone
+		sample = clampf(sample * (0.6 + tier * 0.04), -1.0, 1.0)
 
 		var value := int(clampf(sample, -1.0, 1.0) * 32000.0)
 		data[i * 2] = value & 0xFF

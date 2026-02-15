@@ -4,7 +4,7 @@ class_name BikeController
 ## jumping, boosting, and visual lean/tilt animations.
 
 signal coin_collected(value: int)
-signal obstacle_hit
+signal obstacle_hit(obstacle_area: Area3D)
 
 # --- Tuning --- (dialed back: 15% of diff for calm, 50% for loud)
 @export var base_speed: float = 28.5      # Dialed back: orig 30, prev 20 → 15%
@@ -39,6 +39,7 @@ var audio_reactor: AudioReactor
 
 # Road bounds (updated by road generator)
 var road_half_width: float = 7.0
+var road_center_x: float = 0.0  # Curve offset — where the road center is in world X
 
 
 func _ready() -> void:
@@ -67,9 +68,18 @@ func _handle_input(delta: float) -> void:
 	if Input.is_action_just_pressed("lane_switch_right"):
 		lateral_position += lane_width
 
-	# Clamp to road bounds
-	var max_x := road_half_width - 1.0
-	lateral_position = clampf(lateral_position, -max_x, max_x)
+	# Off-road safety net: if bike overshoots road edge, trigger hit and respawn center
+	var offset_from_road := lateral_position - road_center_x
+	if absf(offset_from_road) > road_half_width and invincible_timer <= 0.0:
+		obstacle_hit.emit(null)
+		invincible_timer = 2.0
+		current_speed *= 0.5
+		lateral_position = road_center_x  # Respawn at road center
+
+	# Clamp to road bounds (relative to road center)
+	var road_min := road_center_x - road_half_width + 0.5
+	var road_max := road_center_x + road_half_width - 0.5
+	lateral_position = clampf(lateral_position, road_min, road_max)
 
 	# Jump
 	if Input.is_action_just_pressed("jump") and is_grounded:
@@ -181,7 +191,7 @@ func _on_area_entered(area: Area3D) -> void:
 		area.queue_free()
 	elif area.is_in_group("obstacle"):
 		if invincible_timer <= 0.0:
-			obstacle_hit.emit()
+			obstacle_hit.emit(area)
 			invincible_timer = 2.0
 			current_speed *= 0.5
 			# Controller rumble
