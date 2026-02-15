@@ -9,6 +9,7 @@ extends Node3D
 @onready var visual_reactor: VisualReactor = $VisualReactor
 @onready var chase_camera: ChaseCamera = $ChaseCamera
 @onready var hud: HUD = $HUD
+@onready var sfx: Node = $SfxManager
 
 
 func _ready() -> void:
@@ -55,12 +56,14 @@ func _process(_delta: float) -> void:
 
 func _on_coin_collected(value: int) -> void:
 	score_manager.add_coin_score(value)
+	sfx.play_coin()
 	# Small rumble on coin pickup
 	Input.start_joy_vibration(0, 0.1, 0.0, 0.05)
 
 
 func _on_obstacle_hit() -> void:
 	score_manager.on_obstacle_hit()
+	sfx.play_hit()
 
 
 func _on_beat() -> void:

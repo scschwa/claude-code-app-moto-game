@@ -37,20 +37,20 @@ func _process(delta: float) -> void:
 	var speed_ratio := bike.get_speed_ratio() if bike else 0.0
 	var target_fov := remap(speed_ratio, 0.0, 1.0, fov_min, fov_max)
 
-	# Energy pushes FOV wider (dialed back: orig 0, prev 10 → 50%)
+	# Energy pushes FOV wider — baseline -20%
 	if audio_reactor:
-		target_fov += audio_reactor.energy * 5.0
+		target_fov += audio_reactor.energy * 4.0
 
-	# Beat FOV kick (dialed back: orig 0, prev bass*5 → 50%)
+	# Beat FOV kick — baseline -20%
 	if audio_reactor and audio_reactor.is_beat:
-		target_fov += audio_reactor.bass * 2.5
+		target_fov += audio_reactor.bass * 2.0
 
 	target_fov = clampf(target_fov, fov_min, fov_max + 5.0)
 	fov = lerp(fov, target_fov, 4.5 * delta)  # Dialed back: orig 3.0, prev 6.0 → 50%
 
-	# Beat shake — balanced (dialed back: orig bass*0.15, prev bass*0.4 → 50%)
+	# Beat shake — baseline -20%
 	if audio_reactor and audio_reactor.is_beat:
-		_shake_amount = audio_reactor.bass * 0.275
+		_shake_amount = audio_reactor.bass * 0.22
 
 	if _shake_amount > 0.001:
 		var shake_offset := Vector3(

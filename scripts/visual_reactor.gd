@@ -56,58 +56,56 @@ func _process(delta: float) -> void:
 		sky_mat.ground_bottom_color = sky_mat.ground_bottom_color.lerp(sky_color * 0.3, 2.6 * delta)
 		sky_mat.ground_horizon_color = sky_mat.ground_horizon_color.lerp(horizon_color * 0.8, 2.6 * delta)
 
-	# Bloom intensity (dialed back: orig 0.3-1.5, prev 0.1-3.0 → 15%/50%)
-	_bloom_target = remap(e, 0.0, 1.0, 0.27, 2.25)
+	# Bloom intensity — baseline -50%, ceiling unchanged
+	_bloom_target = remap(e, 0.0, 1.0, 0.135, 2.25)
 	env.glow_intensity = lerp(env.glow_intensity, _bloom_target, 4.5 * delta)
 
-	# Beat bloom pulse (dialed back: orig +0.5, prev +1.5*b → 50%)
+	# Beat bloom pulse — halved for less flash
 	if audio_reactor.is_beat:
-		env.glow_intensity += 1.0 * b
+		env.glow_intensity += 0.5 * b
 
-	# Glow strength (dialed back: orig static 1.0, prev 0.8-2.0 → 15%/50%)
-	env.glow_strength = lerp(env.glow_strength, remap(e, 0.0, 1.0, 0.97, 1.5), 3.5 * delta)
+	# Glow strength — baseline -50%, ceiling unchanged
+	env.glow_strength = lerp(env.glow_strength, remap(e, 0.0, 1.0, 0.985, 1.5), 3.5 * delta)
 
-	# Saturation (dialed back: orig 0.9-1.4, prev 0.8-1.8 → 15%/50%)
-	_saturation_target = remap(e, 0.0, 1.0, 0.885, 1.6)
+	# Saturation — baseline -20%, ceiling unchanged
+	_saturation_target = remap(e, 0.0, 1.0, 0.91, 1.6)
 	env.adjustment_saturation = lerp(env.adjustment_saturation, _saturation_target, 3.5 * delta)
 
-	# Brightness (dialed back: orig static 1.0, prev 0.95-1.15 → 15%/50%)
+	# Brightness — baseline -50%, beat kick halved, ceiling unchanged
 	var brightness_target := remap(e, 0.0, 1.0, 1.0, 1.075)
 	if audio_reactor.is_beat:
-		brightness_target += 0.05  # Dialed back: orig 0, prev 0.1 → 50%
+		brightness_target += 0.025
 	env.adjustment_brightness = lerp(env.adjustment_brightness, brightness_target, 4.0 * delta)
 
-	# Contrast (dialed back: orig static 1.05, prev 1.0-1.2 → 15%/50%)
-	env.adjustment_contrast = lerp(env.adjustment_contrast, remap(e, 0.0, 1.0, 1.04, 1.125), 3.0 * delta)
+	# Contrast — baseline -20%, ceiling unchanged
+	env.adjustment_contrast = lerp(env.adjustment_contrast, remap(e, 0.0, 1.0, 1.032, 1.125), 3.0 * delta)
 
-	# Vignette glow bloom (dialed back: orig *0.3, prev *0.5 → 50%)
-	env.glow_bloom = lerp(env.glow_bloom, e * 0.4, 3.0 * delta)
+	# Glow bloom — baseline -50%, ceiling unchanged
+	env.glow_bloom = lerp(env.glow_bloom, e * 0.2, 3.0 * delta)
 
-	# Fog (dialed back: orig static 0.002, prev 0.005-0.001 → 15%/50%)
-	env.fog_density = lerp(env.fog_density, remap(e, 0.0, 1.0, 0.00245, 0.0015), 2.5 * delta)
+	# Fog — baseline -20% (thinner at rest), ceiling unchanged
+	env.fog_density = lerp(env.fog_density, remap(e, 0.0, 1.0, 0.00196, 0.0015), 2.5 * delta)
 	env.fog_light_color = env.fog_light_color.lerp(horizon_color, 3.0 * delta)
 
-	# Sun energy (dialed back: orig 0.6-1.2, prev 0.4-2.0 → 15%/50%)
+	# Sun energy — baseline -20%, beat kick -50%, ceiling unchanged
 	if _sun:
-		var sun_energy := remap(e, 0.0, 1.0, 0.57, 1.6)
+		var sun_energy := remap(e, 0.0, 1.0, 0.456, 1.6)
 		if audio_reactor.is_beat:
-			sun_energy += 0.25 * b  # Dialed back: orig 0, prev 0.5 → 50%
+			sun_energy += 0.125 * b
 		_sun.light_energy = lerp(_sun.light_energy, sun_energy, 4.0 * delta)
 
 		# Sun color (dialed back: orig 0.3/0.4, prev 0.5/0.5 → 50%)
 		var target_color := Color(1.0, 0.9 - b * 0.4, 0.8 - b * 0.45)
 		_sun.light_color = _sun.light_color.lerp(target_color, 3.5 * delta)
 
-	# Particles (balanced reactivity)
+	# Particles — baseline -20%, ceiling unchanged
 	if _dust_particles:
-		# Dust (dialed back: orig direct energy, prev remap 0.1-1.0)
-		var dust_target := remap(e, 0.0, 1.0, 0.27, 1.0)
+		var dust_target := remap(e, 0.0, 1.0, 0.216, 1.0)
 		_dust_particles.amount_ratio = lerp(_dust_particles.amount_ratio, dust_target, 3.5 * delta)
 	if _spark_particles:
-		# Sparks (dialed back: orig *1.0, prev *1.5 → 50%)
 		var spark_target := h * 1.25
 		_spark_particles.amount_ratio = lerp(_spark_particles.amount_ratio, clampf(spark_target, 0.0, 1.0), 4.5 * delta)
-		_spark_particles.emitting = h > 0.225  # Dialed back: orig 0.3, prev 0.15 → 50%
+		_spark_particles.emitting = h > 0.27  # Raised threshold slightly, less spark spam at rest
 
 
 func _create_environment() -> void:
@@ -130,11 +128,11 @@ func _create_environment() -> void:
 	# Tone mapping
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
 
-	# Glow (bloom)
+	# Glow (bloom) — start low to avoid initial flash
 	env.glow_enabled = true
-	env.glow_intensity = 0.5
-	env.glow_strength = 1.0
-	env.glow_bloom = 0.1
+	env.glow_intensity = 0.135
+	env.glow_strength = 0.985
+	env.glow_bloom = 0.0
 	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_ADDITIVE
 	env.set_glow_level(0, true)
 	env.set_glow_level(1, true)

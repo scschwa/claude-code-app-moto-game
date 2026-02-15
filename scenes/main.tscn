@@ -1,4 +1,4 @@
-[gd_scene load_steps=9 format=3 uid="uid://main001"]
+[gd_scene load_steps=10 format=3 uid="uid://main001"]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="Script" path="res://scripts/audio_reactor.gd" id="2_audio"]
@@ -8,6 +8,7 @@
 [ext_resource type="Script" path="res://scripts/chase_camera.gd" id="6_camera"]
 [ext_resource type="PackedScene" uid="uid://bike001" path="res://scenes/bike.tscn" id="7_bike"]
 [ext_resource type="PackedScene" uid="uid://hud001" path="res://scenes/hud.tscn" id="8_hud"]
+[ext_resource type="Script" path="res://scripts/sfx_manager.gd" id="9_sfx"]
 
 [node name="Main" type="Node3D"]
 script = ExtResource("1_main")
@@ -30,5 +31,8 @@ script = ExtResource("5_visual")
 transform = Transform3D(1, 0, 0, 0, 0.97, 0.26, 0, -0.26, 0.97, 0, 4, 8)
 fov = 70.0
 script = ExtResource("6_camera")
+
+[node name="SfxManager" type="Node" parent="."]
+script = ExtResource("9_sfx")
 
 [node name="HUD" parent="." instance=ExtResource("8_hud")]

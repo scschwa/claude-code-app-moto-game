@@ -163,9 +163,14 @@ func _update_boost(delta: float) -> void:
 func _update_invincibility(delta: float) -> void:
 	if invincible_timer > 0.0:
 		invincible_timer -= delta
-		# Flash the bike mesh
+		# Flash the bike mesh (blink on/off)
 		if bike_mesh:
 			bike_mesh.visible = fmod(invincible_timer, 0.2) > 0.1
+		# When invincibility ends, ensure the bike is visible again
+		if invincible_timer <= 0.0:
+			invincible_timer = 0.0
+			if bike_mesh:
+				bike_mesh.visible = true
 
 
 func _on_area_entered(area: Area3D) -> void:

@@ -38,9 +38,9 @@ func _process(delta: float) -> void:
 	if audio_reactor and bpm_label:
 		bpm_label.text = "%d BPM" % int(audio_reactor.bpm)
 
-	# Flash on beat
+	# Flash on beat — halved for less screen wash
 	if audio_reactor and audio_reactor.is_beat:
-		_beat_flash_alpha = 0.15
+		_beat_flash_alpha = 0.075
 
 
 func update_score(value: int) -> void:

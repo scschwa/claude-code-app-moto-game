@@ -65,10 +65,10 @@ var _energy_smooth: float = 0.0
 # --- Delay buffer ---
 var _delay_buffer: Array[PackedFloat32Array] = []
 
-# Smoothing factors — tuned for balanced reactivity
-const SMOOTH_FAST := 0.30		# Dialed back: orig 0.15, prev 0.45 → 50% of diff
-const SMOOTH_SLOW := 0.15		# Dialed back: orig 0.05, prev 0.25 → 50% of diff
-const SMOOTH_DECAY := 0.055	# Dialed back: orig ~0.05, prev 0.08 → 15% of diff
+# Smoothing factors — decay -20% for calmer quiet sections
+const SMOOTH_FAST := 0.30
+const SMOOTH_SLOW := 0.15
+const SMOOTH_DECAY := 0.044	# 20% slower decay → values settle to zero faster in quiet parts
 const BEAT_COOLDOWN := 0.135	# Dialed back: orig 0.15, prev 0.12 → 50% of diff
 var _beat_cooldown_timer: float = 0.0
 
