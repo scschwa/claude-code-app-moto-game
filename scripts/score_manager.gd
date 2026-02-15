@@ -5,6 +5,7 @@ class_name ScoreManager
 signal score_changed(new_score: int)
 signal multiplier_changed(new_multiplier: float)
 signal combo_changed(new_combo: int)
+signal score_popup_requested(points: int, combo_count: int)
 
 var score: int = 0
 var multiplier: float = 1.0
@@ -54,12 +55,15 @@ func add_coin_score(base_value: int) -> void:
 
 	# Consume quiet bonus on first coin in an intense section
 	if audio_reactor and audio_reactor.energy > 0.5 and quiet_bonus > 0.0:
-		score += int(base_value * quiet_bonus)
+		var quiet_points := int(base_value * quiet_bonus)
+		score += quiet_points
+		points += quiet_points
 		quiet_bonus = 0.0
 
 	score_changed.emit(score)
 	combo_changed.emit(combo)
 	multiplier_changed.emit(multiplier)
+	score_popup_requested.emit(points, combo)
 
 
 func add_near_miss_score() -> void:
@@ -69,6 +73,7 @@ func add_near_miss_score() -> void:
 	_combo_timer = COMBO_TIMEOUT
 	score_changed.emit(score)
 	combo_changed.emit(combo)
+	score_popup_requested.emit(points, combo)
 
 
 func on_obstacle_hit() -> void:

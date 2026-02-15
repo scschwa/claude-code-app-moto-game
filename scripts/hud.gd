@@ -19,6 +19,14 @@ var audio_reactor: AudioReactor
 func _ready() -> void:
 	if beat_flash:
 		beat_flash.color = Color(1.0, 1.0, 1.0, 0.0)
+
+	# Alarm-clock style monospace font for score display
+	if score_label:
+		var mono_font := SystemFont.new()
+		mono_font.font_names = PackedStringArray(["Consolas", "Courier New", "Lucida Console"])
+		mono_font.antialiasing = TextServer.FONT_ANTIALIASING_LCD
+		score_label.add_theme_font_override("font", mono_font)
+
 	# Wire the visualizer to the audio reactor (deferred so audio_reactor is set by main.gd)
 	_wire_visualizer.call_deferred()
 
@@ -38,14 +46,14 @@ func _process(delta: float) -> void:
 	if audio_reactor and bpm_label:
 		bpm_label.text = "%d BPM" % int(audio_reactor.bpm)
 
-	# Flash on beat
+	# Flash on beat — halved for less screen wash
 	if audio_reactor and audio_reactor.is_beat:
-		_beat_flash_alpha = 0.15
+		_beat_flash_alpha = 0.075
 
 
 func update_score(value: int) -> void:
 	if score_label:
-		score_label.text = "%d" % value
+		score_label.text = "Total Score: %d" % value
 		var tween := create_tween()
 		tween.tween_property(score_label, "scale", Vector2(1.3, 1.3), 0.05)
 		tween.tween_property(score_label, "scale", Vector2(1.0, 1.0), 0.15)
@@ -62,16 +70,10 @@ func update_multiplier(value: float) -> void:
 			multiplier_label.visible = false
 
 
-func update_combo(value: int) -> void:
+func update_combo(_value: int) -> void:
+	# Combo display is now handled by 3D world-space popups from main.gd
 	if combo_label:
-		if value > 2:
-			combo_label.text = "%d COMBO" % value
-			combo_label.visible = true
-			var tween := create_tween()
-			tween.tween_property(combo_label, "scale", Vector2(1.4, 1.4), 0.04)
-			tween.tween_property(combo_label, "scale", Vector2(1.0, 1.0), 0.12)
-		else:
-			combo_label.visible = false
+		combo_label.visible = false
 
 
 func update_boost(value: float, max_value: float) -> void:
@@ -87,4 +89,4 @@ func update_boost(value: float, max_value: float) -> void:
 func update_speed(speed: float, max_speed: float) -> void:
 	if speed_label:
 		var display_speed := int(speed * 3.6)
-		speed_label.text = "%d" % display_speed
+		speed_label.text = "%d km/h" % display_speed

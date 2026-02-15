@@ -1,38 +1,92 @@
-[gd_scene load_steps=7 format=3 uid="uid://bike001"]
+[gd_scene load_steps=16 format=3 uid="uid://bike001"]
 
 [ext_resource type="Script" path="res://scripts/bike_controller.gd" id="1_bike"]
 
-[sub_resource type="BoxMesh" id="BoxMesh_body"]
-size = Vector3(0.6, 0.8, 2.0)
+[sub_resource type="BoxMesh" id="BoxMesh_mainbody"]
+size = Vector3(0.55, 0.38, 2.6)
 
 [sub_resource type="StandardMaterial3D" id="Material_body"]
-albedo_color = Color(0, 0.85, 1, 1)
+albedo_color = Color(0.06, 0.06, 0.08, 1)
+metallic = 0.85
+roughness = 0.35
+
+[sub_resource type="BoxMesh" id="BoxMesh_canopy"]
+size = Vector3(0.4, 0.04, 0.6)
+
+[sub_resource type="StandardMaterial3D" id="Material_canopy"]
+transparency = 1
+albedo_color = Color(0.08, 0.04, 0.04, 0.7)
+metallic = 0.6
+roughness = 0.1
+
+[sub_resource type="PrismMesh" id="PrismMesh_fairing"]
+size = Vector3(0.5, 0.45, 0.85)
+
+[sub_resource type="StandardMaterial3D" id="Material_fairing"]
+albedo_color = Color(0.08, 0.06, 0.06, 1)
 emission_enabled = true
-emission = Color(0, 0.6, 0.9, 1)
-emission_energy_multiplier = 1.5
-metallic = 0.8
-roughness = 0.3
+emission = Color(0.9, 0.2, 0.05, 1)
+emission_energy_multiplier = 1.0
+metallic = 0.9
+roughness = 0.25
+
+[sub_resource type="BoxMesh" id="BoxMesh_tail"]
+size = Vector3(0.4, 0.25, 0.7)
+
+[sub_resource type="BoxMesh" id="BoxMesh_edgestrip"]
+size = Vector3(0.03, 0.06, 2.4)
+
+[sub_resource type="StandardMaterial3D" id="Material_edge"]
+albedo_color = Color(1, 0.4, 0.1, 1)
+emission_enabled = true
+emission = Color(1, 0.25, 0, 1)
+emission_energy_multiplier = 3.0
 
 [sub_resource type="SphereMesh" id="SphereMesh_wheel"]
 radius = 0.35
 height = 0.7
 
 [sub_resource type="StandardMaterial3D" id="Material_wheel"]
-albedo_color = Color(0.15, 0.15, 0.15, 1)
-roughness = 0.9
+albedo_color = Color(0.1, 0.1, 0.1, 1)
+roughness = 0.85
 
 [sub_resource type="BoxShape3D" id="BoxShape_collision"]
-size = Vector3(1.0, 1.2, 2.2)
+size = Vector3(1.0, 1.2, 2.4)
 
 [node name="Bike" type="Node3D"]
 script = ExtResource("1_bike")
 
 [node name="BikeMesh" type="Node3D" parent="."]
 
-[node name="Body" type="MeshInstance3D" parent="BikeMesh"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.7, 0)
-mesh = SubResource("BoxMesh_body")
+[node name="MainBody" type="MeshInstance3D" parent="BikeMesh"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.65, 0)
+mesh = SubResource("BoxMesh_mainbody")
 surface_material_override/0 = SubResource("Material_body")
+
+[node name="Canopy" type="MeshInstance3D" parent="BikeMesh"]
+transform = Transform3D(1, 0, 0, 0, 0.906, -0.423, 0, 0.423, 0.906, 0, 0.88, -0.3)
+mesh = SubResource("BoxMesh_canopy")
+surface_material_override/0 = SubResource("Material_canopy")
+
+[node name="FrontFairing" type="MeshInstance3D" parent="BikeMesh"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.55, -0.95)
+mesh = SubResource("PrismMesh_fairing")
+surface_material_override/0 = SubResource("Material_fairing")
+
+[node name="RearTail" type="MeshInstance3D" parent="BikeMesh"]
+transform = Transform3D(1, 0, 0, 0, 0.966, 0.259, 0, -0.259, 0.966, 0, 0.78, 1.05)
+mesh = SubResource("BoxMesh_tail")
+surface_material_override/0 = SubResource("Material_body")
+
+[node name="LeftEdgeStrip" type="MeshInstance3D" parent="BikeMesh"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.29, 0.65, 0)
+mesh = SubResource("BoxMesh_edgestrip")
+surface_material_override/0 = SubResource("Material_edge")
+
+[node name="RightEdgeStrip" type="MeshInstance3D" parent="BikeMesh"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.29, 0.65, 0)
+mesh = SubResource("BoxMesh_edgestrip")
+surface_material_override/0 = SubResource("Material_edge")
 
 [node name="FrontWheel" type="MeshInstance3D" parent="BikeMesh"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.35, -0.8)
@@ -45,17 +99,35 @@ mesh = SubResource("SphereMesh_wheel")
 surface_material_override/0 = SubResource("Material_wheel")
 
 [node name="Headlight" type="SpotLight3D" parent="BikeMesh"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, -1.0)
-light_color = Color(1, 0.95, 0.8, 1)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, -1.1)
+light_color = Color(1, 0.9, 0.75, 1)
 light_energy = 2.0
 spot_range = 40.0
 spot_angle = 25.0
 
 [node name="NeonTrail" type="OmniLight3D" parent="BikeMesh"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.3, 1.2)
-light_color = Color(0, 0.85, 1, 1)
+light_color = Color(1, 0.3, 0, 1)
 light_energy = 1.5
 omni_range = 3.0
+
+[node name="UnderGlow" type="OmniLight3D" parent="BikeMesh"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.15, 0)
+light_color = Color(1, 0.3, 0, 1)
+light_energy = 0.8
+omni_range = 2.0
+
+[node name="FrontWheelGlow" type="OmniLight3D" parent="BikeMesh"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.35, -0.8)
+light_color = Color(1, 0.25, 0, 1)
+light_energy = 0.6
+omni_range = 0.8
+
+[node name="RearWheelGlow" type="OmniLight3D" parent="BikeMesh"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.35, 0.8)
+light_color = Color(1, 0.25, 0, 1)
+light_energy = 0.6
+omni_range = 0.8
 
 [node name="CollisionArea" type="Area3D" parent="."]
 

@@ -59,16 +59,17 @@ var _prev_magnitudes: PackedFloat32Array
 var _energy_history: PackedFloat32Array
 var _beat_history: Array[float] = []
 var _onset_times: Array[float] = []
-var _flux_threshold: float = 0.08  # Dialed back: orig 0.15, prev 0.005
+var _flux_threshold: float = 0.08
 var _energy_smooth: float = 0.0
+var _bass_avg_slow: float = 0.0  # Slow-moving bass average for beat detection
 
 # --- Delay buffer ---
 var _delay_buffer: Array[PackedFloat32Array] = []
 
-# Smoothing factors — tuned for balanced reactivity
-const SMOOTH_FAST := 0.30		# Dialed back: orig 0.15, prev 0.45 → 50% of diff
-const SMOOTH_SLOW := 0.15		# Dialed back: orig 0.05, prev 0.25 → 50% of diff
-const SMOOTH_DECAY := 0.055	# Dialed back: orig ~0.05, prev 0.08 → 15% of diff
+# Smoothing factors — decay -20% for calmer quiet sections
+const SMOOTH_FAST := 0.30
+const SMOOTH_SLOW := 0.15
+const SMOOTH_DECAY := 0.044	# 20% slower decay → values settle to zero faster in quiet parts
 const BEAT_COOLDOWN := 0.135	# Dialed back: orig 0.15, prev 0.12 → 50% of diff
 var _beat_cooldown_timer: float = 0.0
 
@@ -334,12 +335,17 @@ func _process(delta: float) -> void:
 		_pop_delayed_values()
 		return
 
-	# Smooth live values — balanced multipliers for real music FFT ranges
-	# FFT magnitudes are small (0.0001–0.05), so we boost to get 0.0–1.0 range
-	var target_bass := clampf(raw_bass * 15.0, 0.0, 1.0)   # Dialed back: orig 4, prev 25 → 50%
-	var target_mids := clampf(raw_mids * 23.0, 0.0, 1.0)   # Dialed back: orig 6, prev 40 → 50%
-	var target_highs := clampf(raw_highs * 34.0, 0.0, 1.0)  # Dialed back: orig 8, prev 60 → 50%
-	var target_energy := clampf(raw_energy * 20.0, 0.0, 1.0) # Dialed back: orig 5, prev 35 → 50%
+	# --- Non-linear magnitude mapping ---
+	# Calibrated from real FFT data. Quiet sections have raw_bass ~0.03-0.08,
+	# the drop has raw_bass ~0.10-0.20. Using sqrt scaling so quiet stays quiet
+	# and loud gets the full range. remap clamps at the ends.
+	#   Bass:  0.0–0.08 → 0.0–0.25 (quiet), 0.08–0.20 → 0.25–1.0 (loud)
+	#   Mids:  0.0–0.04 → 0.0–0.20, 0.04–0.15 → 0.20–1.0
+	#   Highs: 0.0–0.005 → 0.0–0.15, 0.005–0.025 → 0.15–1.0
+	var target_bass := _nonlinear_map(raw_bass, 0.002, 0.08, 0.20)
+	var target_mids := _nonlinear_map(raw_mids, 0.002, 0.04, 0.15)
+	var target_highs := _nonlinear_map(raw_highs, 0.0005, 0.005, 0.025)
+	var target_energy := _nonlinear_map(raw_energy, 0.001, 0.035, 0.085)
 
 	# Asymmetric smoothing: snap UP fast, decay DOWN slower (music feels punchy)
 	bass = lerp(bass, target_bass, SMOOTH_FAST if target_bass > bass else SMOOTH_DECAY)
@@ -349,39 +355,41 @@ func _process(delta: float) -> void:
 
 	# Spectral flux — measures rate of change in the spectrum
 	var current_flux := absf(raw_bass - _energy_smooth) + absf(raw_mids - _energy_smooth) * 0.5
-	spectral_flux = lerp(spectral_flux, clampf(current_flux * 30.0, 0.0, 1.0), SMOOTH_FAST)  # Dialed back: orig 10, prev 50 → 50%
-	_energy_smooth = lerp(_energy_smooth, raw_energy, 0.125)  # Dialed back: orig 0.1, prev 0.15 → 50%
+	spectral_flux = lerp(spectral_flux, clampf(current_flux * 30.0, 0.0, 1.0), SMOOTH_FAST)
+	_energy_smooth = lerp(_energy_smooth, raw_energy, 0.125)
 
-	# Beat detection — moderately sensitive
-	_energy_history.append(raw_energy)
-	if _energy_history.size() > 45:  # Dialed back: orig 60, prev 30 → 50% of diff
-		_energy_history.remove_at(0)
-
-	var avg_energy := 0.0
-	for e in _energy_history:
-		avg_energy += e
-	avg_energy /= _energy_history.size()
+	# Beat detection — compare current bass against a slow-moving average
+	# The slow average lags behind, so sudden bass spikes exceed it clearly
+	_bass_avg_slow = lerp(_bass_avg_slow, target_bass, 0.03)  # Very slow follower
 
 	var now := Time.get_ticks_msec() / 1000.0
 
-	# Beat threshold: moderately sensitive (orig avg*1.5+0.15, prev avg*1.2 floor 0.01)
-	var beat_threshold := maxf(avg_energy * 1.35, 0.08)  # 50% between orig and prev
-	if raw_energy > beat_threshold and _beat_cooldown_timer <= 0.0:
+	# Beat = current bass exceeds slow average + offset
+	# The slow average trails behind spikes, so the gap is large on beats
+	# Quiet (avg ~0.15): needs bass ~0.30+ to trigger (0.15*1.2 + 0.12)
+	# Loud (avg ~0.60): needs bass ~0.84+ to trigger (0.60*1.2 + 0.12)
+	var beat_threshold := _bass_avg_slow * 1.2 + 0.12
+	if target_bass > beat_threshold and _beat_cooldown_timer <= 0.0:
 		is_beat = true
 		_beat_cooldown_timer = BEAT_COOLDOWN
 		beat_detected.emit()
 
 		_onset_times.append(now)
-		while _onset_times.size() > 25:  # Dialed back: orig 20, prev 30 → 50%
+		while _onset_times.size() > 30:
 			_onset_times.remove_at(0)
 		_estimate_bpm()
+
+	# Keep energy history for BPM estimation
+	_energy_history.append(target_bass)
+	if _energy_history.size() > 60:
+		_energy_history.remove_at(0)
 
 	# Onset density — how many beats per second recently
 	var recent_onsets := 0
 	for t in _onset_times:
-		if now - t < 2.5:  # Dialed back: orig 2.0, prev 3.0 → 50%
+		if now - t < 3.0:
 			recent_onsets += 1
-	onset_density = lerp(onset_density, float(recent_onsets) / 2.5, SMOOTH_SLOW)
+	onset_density = lerp(onset_density, float(recent_onsets) / 3.0, SMOOTH_SLOW)
 
 	intensity_changed.emit(energy)
 
@@ -395,11 +403,13 @@ func _update_spectrum_data() -> void:
 		var high_freq := _band_edges[i + 1]
 		var mag: Vector2 = _spectrum.get_magnitude_for_frequency_range(low_freq, high_freq)
 		var db := (mag.x + mag.y) / 2.0
-		# Balanced boost for visible but not overwhelming visualizer
-		var boost := 1.0 + float(i) / float(VISUALIZER_BANDS) * 5.0  # Dialed back: orig 4, prev 6 → 50%
-		var value := clampf(db * boost * 18.0, 0.0, 1.0)  # Dialed back: orig 5, prev 30 → 50%
+		# Non-linear mapping per band — low bands have higher magnitudes
+		var band_ratio := float(i) / float(VISUALIZER_BANDS)
+		var knee := lerpf(0.04, 0.003, band_ratio)    # Low bands: knee at 0.04, high bands: 0.003
+		var ceiling := lerpf(0.15, 0.02, band_ratio)   # Low bands: ceiling at 0.15, high bands: 0.02
+		var value := _nonlinear_map(db, knee * 0.1, knee, ceiling)
 		# Asymmetric: snap up fast, decay slower for nice trailing effect
-		var rate := 0.4 if value > spectrum_data[i] else 0.2  # Slightly less snappy
+		var rate := 0.4 if value > spectrum_data[i] else 0.2
 		spectrum_data[i] = lerp(spectrum_data[i], value, rate)
 
 
@@ -472,6 +482,22 @@ func _get_band_energy(low_freq: float, high_freq: float) -> float:
 		return 0.0
 	var mag: Vector2 = _spectrum.get_magnitude_for_frequency_range(low_freq, high_freq)
 	return (mag.x + mag.y) / 2.0
+
+
+func _nonlinear_map(value: float, noise_floor: float, knee: float, ceiling: float) -> float:
+	## Maps raw FFT magnitude to 0.0–1.0 with a soft knee.
+	## Below noise_floor → 0.0
+	## noise_floor to knee → 0.0 to 0.25 (quiet zone, linear)
+	## knee to ceiling → 0.25 to 1.0 (loud zone, sqrt curve for punch)
+	## Above ceiling → 1.0
+	if value <= noise_floor:
+		return 0.0
+	if value <= knee:
+		# Linear in the quiet zone
+		return remap(value, noise_floor, knee, 0.0, 0.25)
+	# Sqrt curve in the loud zone for natural feel
+	var loud_ratio := clampf((value - knee) / (ceiling - knee), 0.0, 1.0)
+	return 0.25 + sqrt(loud_ratio) * 0.75
 
 
 func _estimate_bpm() -> void:
