@@ -11,6 +11,8 @@ extends Node3D
 @onready var hud: HUD = $HUD
 @onready var sfx: Node = $SfxManager
 
+const ScorePopupScript := preload("res://scripts/score_popup.gd")
+
 
 func _ready() -> void:
 	# Wire up references
@@ -29,6 +31,7 @@ func _ready() -> void:
 	score_manager.score_changed.connect(hud.update_score)
 	score_manager.multiplier_changed.connect(hud.update_multiplier)
 	score_manager.combo_changed.connect(hud.update_combo)
+	score_manager.score_popup_requested.connect(_on_score_popup)
 
 	# Controller rumble on beat
 	audio_reactor.beat_detected.connect(_on_beat)
@@ -56,7 +59,7 @@ func _process(_delta: float) -> void:
 
 func _on_coin_collected(value: int) -> void:
 	score_manager.add_coin_score(value)
-	sfx.play_coin()
+	sfx.play_coin(score_manager.combo)
 	# Small rumble on coin pickup
 	Input.start_joy_vibration(0, 0.1, 0.0, 0.05)
 
@@ -64,6 +67,18 @@ func _on_coin_collected(value: int) -> void:
 func _on_obstacle_hit() -> void:
 	score_manager.on_obstacle_hit()
 	sfx.play_hit()
+
+
+func _on_score_popup(points: int, combo_count: int) -> void:
+	var popup: Node3D = ScorePopupScript.new()
+	add_child(popup)
+	# Spawn above the bike with slight jitter to avoid perfect overlap
+	var spawn_pos := bike.global_position + Vector3(
+		randf_range(-0.3, 0.3),
+		2.5 + combo_count * 0.02,
+		-0.5
+	)
+	popup.setup(points, combo_count, spawn_pos)
 
 
 func _on_beat() -> void:

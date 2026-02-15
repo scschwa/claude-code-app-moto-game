@@ -30,6 +30,7 @@ var boost_meter: float = 50.0
 var _boost_timer: float = 0.0
 var current_lean: float = 0.0
 var invincible_timer: float = 0.0
+var _spin_tween: Tween
 
 # References
 @onready var bike_mesh: Node3D = $BikeMesh
@@ -185,6 +186,15 @@ func _on_area_entered(area: Area3D) -> void:
 			current_speed *= 0.5
 			# Controller rumble
 			Input.start_joy_vibration(0, 0.5, 0.8, 0.3)
+			# 720-degree crash spin
+			if bike_mesh:
+				if _spin_tween and _spin_tween.is_valid():
+					_spin_tween.kill()
+				_spin_tween = create_tween()
+				var start_y: float = bike_mesh.rotation.y
+				_spin_tween.tween_property(bike_mesh, "rotation:y", start_y + PI * 4.0, 1.0) \
+					.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+				_spin_tween.tween_callback(func() -> void: bike_mesh.rotation.y = fmod(bike_mesh.rotation.y, TAU))
 
 
 func get_speed_ratio() -> float:
