@@ -1,0 +1,20 @@
+# Godot 4 specific
+.godot/
+
+# Exported builds
+export/
+build/
+
+# OS generated
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+*.swp
+*.swo
+*~
+
+# Import backups
+*.import.bak
