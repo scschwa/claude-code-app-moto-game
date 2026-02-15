@@ -8,8 +8,8 @@ class_name RoadGenerator
 @export var segment_length: float = 20.0
 @export var visible_segments: int = 15
 @export var base_road_width: float = 14.0  # 4 lanes worth
-@export var min_road_width: float = 6.0    # Dialed back: orig 7, prev 5 → 50% of diff
-@export var max_road_width: float = 21.5   # Dialed back: orig 21, prev 24 → 15% of diff
+@export var min_road_width: float = 10.0   # Raised: must fit bike + 2 lanes of clearance
+@export var max_road_width: float = 21.5
 
 var audio_reactor: AudioReactor
 var bike: BikeController
